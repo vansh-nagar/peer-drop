@@ -1,7 +1,9 @@
 "use client";
 import { Button } from "@/components/ui/button";
+import { FileUpload } from "@/components/ui/file-upload";
 import { Input } from "@/components/ui/input";
-import React, { useRef, useState } from "react";
+import { Send } from "lucide-react";
+import { useRef, useState } from "react";
 import { useEffect } from "react";
 
 const page = () => {
@@ -10,6 +12,8 @@ const page = () => {
   const ws = useRef<WebSocket | null>(null);
   const pc = useRef<RTCPeerConnection | null>(null);
   const channel = useRef<RTCDataChannel | undefined>(undefined);
+  const [File, setFile] = useState<File[] | null>(null);
+  const [Image, setImage] = useState<string | null>(null);
 
   useEffect(() => {
     ws.current = new WebSocket("ws://localhost:8080");
@@ -37,11 +41,17 @@ const page = () => {
     };
 
     pc.current.ondatachannel = (e) => {
+      console.log("hello");
       channel.current = e.channel;
+      channel.current.binaryType = "arraybuffer";
       channel.current.onopen = () => {
         console.log("data channel open");
       };
-      channel.current.onmessage = (e) => console.log("P2P message:", e.data);
+      channel.current.onmessage = (e) => {
+        const recivedData = new Uint8Array(e.data);
+        console.log("hello");
+        console.log("P2P message as bytes:", recivedData);
+      };
     };
 
     ws.current.onmessage = async (message) => {
@@ -64,6 +74,7 @@ const page = () => {
 
   const offer = async () => {
     channel.current = pc.current?.createDataChannel("data-transfer");
+    if (channel.current) channel.current.binaryType = "arraybuffer";
     if (!channel.current) return;
     channel.current.onopen = () => {
       console.log("data channel open");
@@ -88,29 +99,50 @@ const page = () => {
       ws.current.send(JSON.stringify({ type: "answer", answer: ans }));
   };
 
-  const send = () => {
+  const send = async () => {
     console.log("ready-state", ws.current?.readyState);
     // if (ws.current && ws.current.readyState === WebSocket.OPEN) {
     //   ws.current.send(message);
     // }
     if (channel.current && channel.current.readyState === "open") {
-      channel.current.send(message);
+      // channel.current.send(message);
+
+      const file = File?.[0];
+      const arrayBuffer = await file?.arrayBuffer(); //raw array buffer
+      const bytes = new Uint8Array(arrayBuffer!); //array buffer converted into bytes
+      //readable + controllable bytes You can send ArrayBuffer, but you can’t control it without bytes.
+      console.log("bytes", bytes);
+
+      channel.current.send(bytes);
     }
+
+    setMessage("");
   };
 
   return (
-    <div className=" h-screen w-full flex justify-center items-center">
-      <div className=" w-md">
-        <Input
-          onChange={(e) => {
-            setMessage(e.target.value);
+    <div className=" h-screen w-full flex justify-center items-center p-3">
+      <div className=" min-w-md flex flex-col gap-2">
+        <FileUpload onChange={setFile} />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+
+            send();
           }}
-          placeholder="Type here..."
-        />
-        <Button onClick={send} className="mt-1">
-          Enter
-        </Button>
-        <Button onClick={offer} className="mt-1">
+          className=" flex  justify-center items-center  gap-2"
+        >
+          <Input
+            value={message}
+            onChange={(e) => {
+              setMessage(e.target.value);
+            }}
+            placeholder="Type here..."
+          />
+          <Button type="submit" size={"icon"} className="mt-1">
+            <Send />
+          </Button>
+        </form>
+        <Button onClick={offer} variant={"outline"} className="mt-1">
           Send offer
         </Button>
       </div>
