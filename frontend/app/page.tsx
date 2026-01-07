@@ -51,6 +51,12 @@ const page = () => {
         const recivedData = new Uint8Array(e.data);
         console.log("hello");
         console.log("P2P message as bytes:", recivedData);
+
+        const blob = new Blob([recivedData]);
+        console.log("File Blob:", blob);
+        const url = URL.createObjectURL(blob);
+        console.log("File URL:", url);
+        setImage(url);
       };
     };
 
@@ -107,6 +113,7 @@ const page = () => {
     if (channel.current && channel.current.readyState === "open") {
       // channel.current.send(message);
 
+      if (!File) return;
       const file = File?.[0];
       const arrayBuffer = await file?.arrayBuffer(); //raw array buffer
       const bytes = new Uint8Array(arrayBuffer!); //array buffer converted into bytes
@@ -122,6 +129,7 @@ const page = () => {
   return (
     <div className=" h-screen w-full flex justify-center items-center p-3">
       <div className=" min-w-md flex flex-col gap-2">
+        {Image && <img src={Image} alt="recived" />}
         <FileUpload onChange={setFile} />
         <form
           onSubmit={(e) => {
