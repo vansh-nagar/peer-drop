@@ -3,21 +3,45 @@ import { WebSocketServer } from "ws";
 
 const wss = new WebSocketServer({ port: 8080 });
 
-wss.on("connection", function connection(ws) {
-  ws.on("message", function (data) {
+const rooms = new Map<string, WebSocket[]>();
+
+wss.on("connection", function connection(ws: any) {
+  ws.on("message", function (data: any) {
     const message = JSON.parse(data.toString());
+
+    if (message.type === "join") {
+      console.log(`Client joined room: ${message.roomId}`);
+      if (!rooms.has(message.roomId)) {
+        rooms.set(message.roomId, []);
+      }
+
+      rooms.get(message.roomId)!.push(ws);
+      console.log(
+        `Total clients in room ${message.roomId}: ${
+          rooms.get(message.roomId)!.length
+        }`
+      );
+    }
+
     if (message.type === "offer") {
       console.log("offer received");
-      wss.clients.forEach((client) => {
+
+      rooms.get(message.roomId)!.forEach((client) => {
         if (client !== ws && client.readyState === 1) {
-          client.send(JSON.stringify({ type: "offer", offer: message.offer }));
+          client.send(
+            JSON.stringify({
+              type: "offer",
+              offer: message.offer,
+              roomId: message.roomId,
+            })
+          );
         }
       });
       console.log("offer forwarded");
     }
     if (message.type === "answer") {
       console.log("answer received");
-      wss.clients.forEach((client) => {
+      rooms.get(message.roomId)!.forEach((client) => {
         if (client !== ws && client.readyState === 1) {
           client.send(
             JSON.stringify({ type: "answer", answer: message.answer })
@@ -29,7 +53,7 @@ wss.on("connection", function connection(ws) {
     if (message.type === "candidate") {
       console.log("candidate received");
 
-      wss.clients.forEach((client) => {
+      rooms.get(message.roomId)!.forEach((client) => {
         if (client !== ws && client.readyState === 1) {
           client.send(
             JSON.stringify({ type: "candidate", candidate: message.candidate })
@@ -38,6 +62,16 @@ wss.on("connection", function connection(ws) {
       });
       console.log("candidate forwarded");
     }
+  });
+
+  ws.on("close", () => {
+    rooms.forEach((client, roomid) => {
+      rooms.set(
+        roomid,
+        client.filter((c) => c !== ws)
+      );
+      console.log(`Client disconnected from room: ${roomid}`);
+    });
   });
 });
 

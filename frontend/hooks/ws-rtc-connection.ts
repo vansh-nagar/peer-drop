@@ -1,18 +1,21 @@
 import { useState, useRef, useEffect } from "react";
 
-export const wsRtcConnectionHook = () => {
+export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const [message, setMessage] = useState<string>("");
 
   const ws = useRef<WebSocket | null>(null);
   const pc = useRef<RTCPeerConnection | null>(null);
   const channel = useRef<RTCDataChannel | undefined>(undefined);
+  const recivedData = useRef<Uint8Array[]>([]);
   const [File, setFile] = useState<File[] | null>(null);
   const [Image, setImage] = useState<string | null>(null);
+  const [totalSize, setTotalSize] = useState(10);
+  const [uploadedSize, setUploadedSize] = useState(0);
 
   useEffect(() => {
     ws.current = new WebSocket("ws://localhost:8080");
     ws.current.onopen = () => {
-      console.log("WebSocket Client Connected");
+      if (roomId) ws.current?.send(JSON.stringify({ type: "join", roomId }));
     };
 
     pc.current = new RTCPeerConnection({
@@ -29,10 +32,11 @@ export const wsRtcConnectionHook = () => {
     pc.current.onicecandidate = (e) => {
       if (e.candidate && ws.current) {
         ws.current.send(
-          JSON.stringify({ type: "candidate", candidate: e.candidate })
+          JSON.stringify({ type: "candidate", candidate: e.candidate, roomId })
         );
       }
     };
+    let reciveSize = 0;
 
     pc.current.ondatachannel = (e) => {
       console.log("hello");
@@ -42,15 +46,26 @@ export const wsRtcConnectionHook = () => {
         console.log("data channel open");
       };
       channel.current.onmessage = (e) => {
-        const recivedData = new Uint8Array(e.data);
-        console.log("hello");
-        console.log("P2P message as bytes:", recivedData);
+        if (typeof e.data === "string" && e.data === "EOF") {
+          const finalData = new Uint8Array(reciveSize);
+          let offset = 0;
 
-        const blob = new Blob([recivedData]);
-        console.log("File Blob:", blob);
-        const url = URL.createObjectURL(blob);
-        console.log("File URL:", url);
-        setImage(url);
+          for (const c of recivedData.current) {
+            finalData.set(c, offset);
+            offset += c.length;
+          }
+
+          const blob = new Blob([finalData]);
+          setImage(URL.createObjectURL(blob));
+          recivedData.current = [];
+          reciveSize = 0;
+
+          return;
+        }
+
+        const data = new Uint8Array(e.data);
+        recivedData.current.push(data);
+        reciveSize += data.length;
       };
     };
 
@@ -86,7 +101,7 @@ export const wsRtcConnectionHook = () => {
     await pc.current.setLocalDescription(offer);
 
     if (offer && ws.current) {
-      ws.current.send(JSON.stringify({ type: "offer", offer: offer }));
+      ws.current.send(JSON.stringify({ type: "offer", offer: offer, roomId }));
     }
   };
 
@@ -96,29 +111,41 @@ export const wsRtcConnectionHook = () => {
     pc.current?.setLocalDescription(ans);
 
     if (ws.current)
-      ws.current.send(JSON.stringify({ type: "answer", answer: ans }));
+      ws.current.send(JSON.stringify({ type: "answer", answer: ans, roomId }));
   };
 
   const send = async () => {
     console.log("ready-state", ws.current?.readyState);
-    // if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-    //   ws.current.send(message);
-    // }
     if (channel.current && channel.current.readyState === "open") {
-      // channel.current.send(message);
-
-      if (!File) return;
+      const CHUNK_SIZE = 16 * 1024;
       const file = File?.[0];
-      const arrayBuffer = await file?.arrayBuffer(); //raw array buffer
-      const bytes = new Uint8Array(arrayBuffer!); //array buffer converted into bytes
-      //readable + controllable bytes You can send ArrayBuffer, but you can’t control it without bytes.
-      console.log("bytes", bytes);
+      const buffer = await file?.arrayBuffer();
+      const bytes = new Uint8Array(buffer!); // bytes are managable not buffer
 
-      channel.current.send(bytes);
+      setTotalSize(bytes.length);
+      for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+        setUploadedSize((prev) => prev + chunk.length);
+        const chunk = bytes.slice(i, i + CHUNK_SIZE);
+        channel.current.send(chunk);
+      }
+
+      channel.current.send("EOF");
+
+      console.log(bytes);
     }
 
     setMessage("");
   };
 
-  return { message, setMessage, offer, send, File, setFile, Image };
+  return {
+    message,
+    setMessage,
+    offer,
+    send,
+    File,
+    setFile,
+    Image,
+    uploadedSize,
+    totalSize,
+  };
 };

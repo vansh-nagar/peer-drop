@@ -2,39 +2,74 @@
 import { Button } from "@/components/ui/button";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Input } from "@/components/ui/input";
-import { Send } from "lucide-react";
+import { RotateCcw, Send } from "lucide-react";
 import { wsRtcConnectionHook } from "@/hooks/ws-rtc-connection";
+import { useParams } from "next/navigation";
+import RainBowBar from "@/components/mine/rainbow-bar";
+import { LightDarkMode } from "@/components/mine/light-dark-mode";
 
-const Page = ({ id }: { id: string }) => {
-  const { message, setMessage, offer, send, File, setFile, Image } =
-    wsRtcConnectionHook();
+const Page = () => {
+  const params = useParams();
+  const { id } = params as { id: string };
+  const {
+    message,
+    setMessage,
+    offer,
+    send,
+    File,
+    setFile,
+    Image,
+    uploadedSize,
+    totalSize,
+  } = wsRtcConnectionHook({ roomId: id });
+
+  console.log(id);
   return (
     <div className=" h-screen w-full flex justify-center items-center p-3">
-      <div className=" min-w-md flex flex-col gap-2">
-        {Image && <img src={Image} alt="recived" />}
-        <FileUpload onChange={setFile} />
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-
-            send();
+      <div className=" fixed top-4 right-4 flex gap-3 flex-col">
+        <LightDarkMode />
+        <Button
+          size={"icon"}
+          variant={"outline"}
+          onClick={() => {
+            window.location.reload();
           }}
-          className=" flex  justify-center items-center  gap-2"
+          className=" border-dashed rounded-none"
         >
-          <Input
-            value={message}
-            onChange={(e) => {
-              setMessage(e.target.value);
+          <RotateCcw />
+        </Button>
+      </div>
+      <div className="max-w-md w-full flex flex-col gap-2">
+        <div className="aspect-square flex justify-center">
+          {Image && (
+            <img src={Image} className="w-full object-contain" alt="recived" />
+          )}
+        </div>
+        <FileUpload onChange={setFile} />
+
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={(e) => {
+              e.preventDefault();
+
+              send();
             }}
-            placeholder="Type here..."
-          />
-          <Button type="submit" size={"icon"} className="mt-1">
+            type="submit"
+            size={"icon"}
+          >
             <Send />
           </Button>
-        </form>
-        <Button onClick={offer} variant={"outline"} className="mt-1">
-          Send offer
-        </Button>
+          <Button onClick={offer} variant={"outline"} className="">
+            Send offer
+          </Button>
+        </div>
+
+        <div className="h-2 w-full overflow-hidden  bg-muted rounded-full">
+          <RainBowBar
+            style={{ width: `${(uploadedSize / totalSize) * 100}%` }}
+            className={`rounded-full blur-xs `}
+          />
+        </div>
       </div>
     </div>
   );
