@@ -1,3 +1,4 @@
+import { useInstantTransition } from "motion/react";
 import { useState, useRef, useEffect } from "react";
 
 export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
@@ -11,6 +12,13 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const [Image, setImage] = useState<string | null>(null);
   const [totalSize, setTotalSize] = useState(10);
   const [uploadedSize, setUploadedSize] = useState(0);
+  const updatedUploadedSize = useRef(0);
+
+  useEffect(() => {
+    setInterval(() => {
+      setUploadedSize(updatedUploadedSize.current);
+    }, 100);
+  }, []);
 
   useEffect(() => {
     ws.current = new WebSocket("ws://localhost:8080");
@@ -39,33 +47,32 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     let reciveSize = 0;
 
     pc.current.ondatachannel = (e) => {
-      console.log("hello");
       channel.current = e.channel;
       channel.current.binaryType = "arraybuffer";
       channel.current.onopen = () => {
         console.log("data channel open");
       };
       channel.current.onmessage = (e) => {
-        if (typeof e.data === "string" && e.data === "EOF") {
-          const finalData = new Uint8Array(reciveSize);
+        if ((typeof e.data as string) && e.data === "EOF") {
+          console.log(recivedData.current);
           let offset = 0;
-
-          for (const c of recivedData.current) {
-            finalData.set(c, offset);
-            offset += c.length;
+          let finalFile = new Uint8Array(reciveSize);
+          for (const chunk of recivedData.current) {
+            finalFile.set(chunk, offset);
+            offset += chunk.length;
           }
-
-          const blob = new Blob([finalData]);
-          setImage(URL.createObjectURL(blob));
-          recivedData.current = [];
+          const blob = new Blob([finalFile]);
+          const url = URL.createObjectURL(blob);
+          setImage(url);
           reciveSize = 0;
+          recivedData.current = [];
 
           return;
         }
-
-        const data = new Uint8Array(e.data);
-        recivedData.current.push(data);
-        reciveSize += data.length;
+        const byte = new Uint8Array(e.data);
+        recivedData.current.push(byte);
+        reciveSize += byte.length;
+        console.log(byte);
       };
     };
 
@@ -115,26 +122,18 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   };
 
   const send = async () => {
-    console.log("ready-state", ws.current?.readyState);
-    if (channel.current && channel.current.readyState === "open") {
-      const CHUNK_SIZE = 16 * 1024;
-      const file = File?.[0];
-      const buffer = await file?.arrayBuffer();
-      const bytes = new Uint8Array(buffer!); // bytes are managable not buffer
+    const file = File![0];
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const CHUNK_SIZE = 16 * 1024;
+    setTotalSize(bytes.length);
 
-      setTotalSize(bytes.length);
-      for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
-        setUploadedSize((prev) => prev + chunk.length);
-        const chunk = bytes.slice(i, i + CHUNK_SIZE);
-        channel.current.send(chunk);
-      }
-
-      channel.current.send("EOF");
-
-      console.log(bytes);
+    for (let i = 0; i <= bytes.length; i += CHUNK_SIZE) {
+      channel.current?.send(bytes.slice(i, i + CHUNK_SIZE));
+      console.log(bytes.slice(i, i + CHUNK_SIZE));
+      updatedUploadedSize.current += CHUNK_SIZE;
     }
-
-    setMessage("");
+    channel.current?.send("EOF");
   };
 
   return {

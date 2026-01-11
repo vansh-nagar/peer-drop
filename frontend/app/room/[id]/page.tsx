@@ -1,7 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { FileUpload } from "@/components/ui/file-upload";
-import { Input } from "@/components/ui/input";
 import { RotateCcw, Send } from "lucide-react";
 import { wsRtcConnectionHook } from "@/hooks/ws-rtc-connection";
 import { useParams } from "next/navigation";
@@ -39,14 +38,13 @@ const Page = () => {
           <RotateCcw />
         </Button>
       </div>
-      <div className="max-w-md w-full flex flex-col gap-2">
-        <div className="aspect-square flex justify-center">
+      <div className="max-w-md w-full flex flex-col justify-center  gap-2">
+        <div className=" flex justify-center w-20 aspect-square border">
           {Image && (
             <img src={Image} className="w-full object-contain" alt="recived" />
           )}
         </div>
         <FileUpload onChange={setFile} />
-
         <div className="flex items-center gap-3">
           <Button
             onClick={(e) => {
@@ -63,12 +61,14 @@ const Page = () => {
             Send offer
           </Button>
         </div>
-
-        <div className="h-2 w-full overflow-hidden  bg-muted rounded-full">
-          <RainBowBar
-            style={{ width: `${(uploadedSize / totalSize) * 100}%` }}
-            className={`rounded-full blur-xs `}
-          />
+        <div className="flex  items-center gap-3">
+          <div className="h-2 w-full overflow-hidden  bg-muted rounded-full ">
+            <RainBowBar
+              style={{ width: `${(uploadedSize / totalSize) * 100}%` }}
+              className={`rounded-full blur-xs `}
+            />
+          </div>
+          {`${(Math.floor(uploadedSize) / totalSize) * 100}%`}
         </div>
       </div>
     </div>
