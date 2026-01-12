@@ -24,7 +24,7 @@ const Page = () => {
 
   console.log(id);
   return (
-    <div className=" h-screen w-full flex justify-center items-center p-3">
+    <div className=" w-full flex justify-center items-center p-3">
       <div className=" fixed top-4 right-4 flex gap-3 flex-col">
         <LightDarkMode />
         <Button
@@ -39,10 +39,24 @@ const Page = () => {
         </Button>
       </div>
       <div className="max-w-md w-full flex flex-col justify-center  gap-2">
-        <div className=" flex justify-center w-20 aspect-square border">
+        <div className=" flex justify-center w-full h-40 aspect-square border">
           {Image && (
             <img src={Image} className="w-full object-contain" alt="recived" />
           )}
+          <div className="flex flex-col">
+            {Image && (
+              <video
+                autoPlay
+                muted
+                loop
+                src={Image}
+                className="w-full object-contain"
+              />
+            )}
+            <a href={Image || ""} download={true}>
+              <Button size={"sm"}>Download</Button>
+            </a>
+          </div>
         </div>
         <FileUpload onChange={setFile} />
         <div className="flex items-center gap-3">
@@ -68,7 +82,7 @@ const Page = () => {
               className={`rounded-full blur-xs `}
             />
           </div>
-          {`${(Math.floor(uploadedSize) / totalSize) * 100}%`}
+          {`${Math.floor(uploadedSize / totalSize) * 100}%`}
         </div>
       </div>
     </div>

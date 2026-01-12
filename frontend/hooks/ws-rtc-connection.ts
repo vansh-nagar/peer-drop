@@ -17,7 +17,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   useEffect(() => {
     setInterval(() => {
       setUploadedSize(updatedUploadedSize.current);
-    }, 100);
+    }, 50);
   }, []);
 
   useEffect(() => {
@@ -64,6 +64,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
           const blob = new Blob([finalFile]);
           const url = URL.createObjectURL(blob);
           setImage(url);
+
           reciveSize = 0;
           recivedData.current = [];
 
@@ -128,10 +129,30 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     const CHUNK_SIZE = 16 * 1024;
     setTotalSize(bytes.length);
 
+    const MAX_MEMORY = 8 * 1024 * 1024;
+    const MIN_MEMORY = 2 * 1024 * 1024;
+
+    const pause = async () => {
+      await new Promise<void>((resolve) => {
+        const check = () => {
+          if (channel.current?.bufferedAmount! < MIN_MEMORY) {
+            resolve();
+          } else {
+            setTimeout(check, 50);
+          }
+        };
+        check();
+      });
+    };
+
     for (let i = 0; i <= bytes.length; i += CHUNK_SIZE) {
       channel.current?.send(bytes.slice(i, i + CHUNK_SIZE));
       console.log(bytes.slice(i, i + CHUNK_SIZE));
       updatedUploadedSize.current += CHUNK_SIZE;
+      console.log("BUFFER MEMORY: ", channel.current?.bufferedAmount);
+      if (channel.current?.bufferedAmount! > MAX_MEMORY) {
+        await pause();
+      }
     }
     channel.current?.send("EOF");
   };
