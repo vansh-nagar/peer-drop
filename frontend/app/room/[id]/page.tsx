@@ -75,14 +75,14 @@ const Page = () => {
             Send offer
           </Button>
         </div>
-        <div className="flex  items-center gap-3">
-          <div className="h-2 w-full overflow-hidden  bg-muted rounded-full ">
+        <div className="flex items-center gap-3">
+          <div className="h-2 w-full overflow-hidden bg-muted rounded-full">
             <RainBowBar
               style={{ width: `${(uploadedSize / totalSize) * 100}%` }}
-              className={`rounded-full blur-xs `}
+              className="rounded-full blur-xs transition-all duration-500 ease-out"
             />
           </div>
-          {`${Math.floor(uploadedSize / totalSize) * 100}%`}
+          {`${Math.floor((uploadedSize / totalSize) * 100)}%`}
         </div>
       </div>
     </div>

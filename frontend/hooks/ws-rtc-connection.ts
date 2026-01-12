@@ -13,12 +13,31 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const [totalSize, setTotalSize] = useState(10);
   const [uploadedSize, setUploadedSize] = useState(0);
   const updatedUploadedSize = useRef(0);
+  const PAUSE_STREAMING = useRef(false);
+
+  const MAX_MEMORY = 8 * 1024 * 1024;
+  const MIN_MEMORY = 2 * 1024 * 1024;
 
   useEffect(() => {
     setInterval(() => {
       setUploadedSize(updatedUploadedSize.current);
     }, 50);
   }, []);
+
+  const pause = async () => {
+    await new Promise<void>((resolve) => {
+      const check = () => {
+        if (channel.current?.bufferedAmount! < MIN_MEMORY) {
+          resolve();
+        } else {
+          setTimeout(() => {
+            check();
+          }, 50);
+        }
+      };
+      check();
+    });
+  };
 
   useEffect(() => {
     ws.current = new WebSocket("ws://localhost:8080");
@@ -52,7 +71,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
       channel.current.onopen = () => {
         console.log("data channel open");
       };
-      channel.current.onmessage = (e) => {
+      channel.current.onmessage = async (e) => {
         if ((typeof e.data as string) && e.data === "EOF") {
           console.log(recivedData.current);
           let offset = 0;
@@ -70,9 +89,23 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
 
           return;
         }
+        if ((typeof e.data as string) && e.data === "PAUSE") {
+          PAUSE_STREAMING.current = true;
+          console.log("PAUSEEEEEEEEEEEEEEEEEE");
+        }
+        if ((typeof e.data as string) && e.data === "CONTINUE") {
+          PAUSE_STREAMING.current = false;
+          console.log("CONTINUEEEEEEEEEEEEEE");
+        }
         const byte = new Uint8Array(e.data);
         recivedData.current.push(byte);
         reciveSize += byte.length;
+
+        if (reciveSize > MAX_MEMORY) {
+          channel.current?.send("PAUSE");
+          await pause();
+          channel.current?.send("CONTINUE");
+        }
         console.log(byte);
       };
     };
@@ -122,6 +155,21 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
       ws.current.send(JSON.stringify({ type: "answer", answer: ans, roomId }));
   };
 
+  const pauseTillStreamTrue = async () => {
+    await new Promise<void>((r) => {
+      const check = () => {
+        if (PAUSE_STREAMING.current === false) {
+          r();
+        } else {
+          setTimeout(() => {
+            check();
+          }, 50);
+        }
+      };
+      check();
+    });
+  };
+
   const send = async () => {
     const file = File![0];
     const buffer = await file.arrayBuffer();
@@ -129,23 +177,9 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     const CHUNK_SIZE = 16 * 1024;
     setTotalSize(bytes.length);
 
-    const MAX_MEMORY = 8 * 1024 * 1024;
-    const MIN_MEMORY = 2 * 1024 * 1024;
-
-    const pause = async () => {
-      await new Promise<void>((resolve) => {
-        const check = () => {
-          if (channel.current?.bufferedAmount! < MIN_MEMORY) {
-            resolve();
-          } else {
-            setTimeout(check, 50);
-          }
-        };
-        check();
-      });
-    };
-
     for (let i = 0; i <= bytes.length; i += CHUNK_SIZE) {
+      if (PAUSE_STREAMING.current === true) await pauseTillStreamTrue();
+
       channel.current?.send(bytes.slice(i, i + CHUNK_SIZE));
       console.log(bytes.slice(i, i + CHUNK_SIZE));
       updatedUploadedSize.current += CHUNK_SIZE;
