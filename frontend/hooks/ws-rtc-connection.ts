@@ -103,15 +103,6 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
 
         channel.current?.send("ACK");
 
-        if (!paused && reciveSize > MAX_MEMORY) {
-          channel.current?.send("PAUSE");
-          paused = true;
-        }
-        if (paused && reciveSize < MAX_MEMORY) {
-          channel.current?.send("CONTINUE");
-          paused = false;
-        }
-
         console.log(byte);
       };
     };
@@ -144,14 +135,6 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
 
     channel.current.onmessage = (e) => {
       if (typeof e.data === "string") {
-        if (e.data === "PAUSE") {
-          PAUSE_STREAMING.current = true;
-          console.log("PAUSEEEEEEEEEEEEEEEEEE");
-        }
-        if (e.data === "CONTINUE") {
-          PAUSE_STREAMING.current = false;
-          console.log("CONTINUEEEEEEEEEEEEEE");
-        }
         if (e.data === "ACK") {
           console.log("ACK CAME CONTINUING");
           inFlightChunk.current = Math.max(0, inFlightChunk.current - 1);
@@ -177,7 +160,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
       ws.current.send(JSON.stringify({ type: "answer", answer: ans, roomId }));
   };
 
-  const pauseTillStreamTrue = async () => {
+  const pauseTillStreamFalse = async () => {
     await new Promise<void>((r) => {
       const check = () => {
         if (PAUSE_STREAMING.current === false) {
@@ -200,10 +183,10 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     setTotalSize(bytes.length);
 
     for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
-      if (PAUSE_STREAMING.current === true) await pauseTillStreamTrue();
+      if (PAUSE_STREAMING.current === true) await pauseTillStreamFalse();
 
       while (inFlightChunk.current >= ACK_WINDOW) {
-        await new Promise<void>((r) => setTimeout(r, 20));
+        await new Promise<void>((r) => setTimeout(r, 50));
       }
 
       if (channel.current?.bufferedAmount! > MAX_MEMORY) await pause();
