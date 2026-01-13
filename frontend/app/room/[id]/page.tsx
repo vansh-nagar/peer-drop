@@ -6,20 +6,23 @@ import { wsRtcConnectionHook } from "@/hooks/ws-rtc-connection";
 import { useParams } from "next/navigation";
 import RainBowBar from "@/components/mine/rainbow-bar";
 import { LightDarkMode } from "@/components/mine/light-dark-mode";
+import { toast } from "sonner";
 
 const Page = () => {
   const params = useParams();
   const { id } = params as { id: string };
   const {
-    message,
-    setMessage,
     offer,
     send,
-    File,
     setFile,
     Image,
     uploadedSize,
+    setUploadedSize,
     totalSize,
+    ack,
+    setTotalSize,
+    File,
+    updatedUploadedSize,
   } = wsRtcConnectionHook({ roomId: id });
 
   console.log(id);
@@ -62,8 +65,11 @@ const Page = () => {
         <div className="flex items-center gap-3">
           <Button
             onClick={(e) => {
+              if (!File?.length) return toast.error("Please enter a file");
               e.preventDefault();
-
+              setUploadedSize(10);
+              setTotalSize(0);
+              updatedUploadedSize.current = 0;
               send();
             }}
             type="submit"
@@ -74,6 +80,11 @@ const Page = () => {
           <Button onClick={offer} variant={"outline"} className="">
             Send offer
           </Button>
+          <div
+            className={`rounded-full border ${
+              ack ? "bg-green-400" : "bg-red-500 "
+            } h-2 aspect-square`}
+          ></div>
         </div>
         <div className="flex items-center gap-3">
           <div className="h-2 w-full overflow-hidden bg-muted rounded-full">
@@ -82,7 +93,7 @@ const Page = () => {
               className="rounded-full blur-xs transition-all duration-500 ease-out"
             />
           </div>
-          {`${Math.floor((uploadedSize / totalSize) * 100)}%`}
+          {/* {`${Math.floor((uploadedSize / totalSize) * 100)}%`} */}
         </div>
       </div>
     </div>

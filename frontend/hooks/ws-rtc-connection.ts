@@ -10,10 +10,11 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const recivedData = useRef<Uint8Array[]>([]);
   const [File, setFile] = useState<File[] | null>(null);
   const [Image, setImage] = useState<string | null>(null);
-  const [totalSize, setTotalSize] = useState(10);
-  const [uploadedSize, setUploadedSize] = useState(0);
+  const [totalSize, setTotalSize] = useState(0);
+  const [uploadedSize, setUploadedSize] = useState(10);
   const updatedUploadedSize = useRef(0);
   const PAUSE_STREAMING = useRef(false);
+  const [ack, setAck] = useState(false);
 
   const MAX_MEMORY = 8 * 1024 * 1024;
   const MIN_MEMORY = 2 * 1024 * 1024;
@@ -72,31 +73,38 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
         console.log("data channel open");
       };
       channel.current.onmessage = async (e) => {
-        if ((typeof e.data as string) && e.data === "EOF") {
-          console.log(recivedData.current);
-          let offset = 0;
-          let finalFile = new Uint8Array(reciveSize);
-          for (const chunk of recivedData.current) {
-            finalFile.set(chunk, offset);
-            offset += chunk.length;
-          }
-          const blob = new Blob([finalFile]);
-          const url = URL.createObjectURL(blob);
-          setImage(url);
+        console.log("P2P message received", e.data);
+        if (typeof e.data === "string") {
+          if (e.data === "EOF") {
+            console.log("EOFFFFFFFFF agaya bc");
+            console.log(recivedData.current);
+            let offset = 0;
+            let finalFile = new Uint8Array(reciveSize);
+            for (const chunk of recivedData.current) {
+              finalFile.set(chunk, offset);
+              offset += chunk.length;
+            }
+            const blob = new Blob([finalFile], { type: "image/png" });
+            const url = URL.createObjectURL(blob);
+            setImage(url);
 
-          reciveSize = 0;
-          recivedData.current = [];
+            reciveSize = 0;
+            recivedData.current = [];
+
+            setAck(true);
+            channel.current?.send("ACK");
+
+            console.log("setting ack to true :)");
+            setTimeout(() => {
+              setAck(false);
+            }, 5000);
+
+            return;
+          }
 
           return;
         }
-        if ((typeof e.data as string) && e.data === "PAUSE") {
-          PAUSE_STREAMING.current = true;
-          console.log("PAUSEEEEEEEEEEEEEEEEEE");
-        }
-        if ((typeof e.data as string) && e.data === "CONTINUE") {
-          PAUSE_STREAMING.current = false;
-          console.log("CONTINUEEEEEEEEEEEEEE");
-        }
+
         const byte = new Uint8Array(e.data);
         recivedData.current.push(byte);
         reciveSize += byte.length;
@@ -135,7 +143,26 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     channel.current.onopen = () => {
       console.log("data channel open");
     };
-    channel.current.onmessage = (e) => console.log("P2P message:", e.data);
+
+    channel.current.onmessage = (e) => {
+      if (typeof e.data === "string") {
+        if (e.data === "PAUSE") {
+          PAUSE_STREAMING.current = true;
+          console.log("PAUSEEEEEEEEEEEEEEEEEE");
+        }
+        if (e.data === "CONTINUE") {
+          PAUSE_STREAMING.current = false;
+          console.log("CONTINUEEEEEEEEEEEEEE");
+        }
+        if (e.data === "ACK") {
+          console.log("setting ack to true :)");
+          setAck(true);
+          setTimeout(() => {
+            setAck(false);
+          }, 5000);
+        }
+      }
+    };
 
     if (!pc.current) return;
     const offer = await pc.current.createOffer();
@@ -174,7 +201,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     const file = File![0];
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
-    const CHUNK_SIZE = 16 * 1024;
+    const CHUNK_SIZE = 256 * 1024;
     setTotalSize(bytes.length);
 
     for (let i = 0; i <= bytes.length; i += CHUNK_SIZE) {
@@ -201,5 +228,9 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     Image,
     uploadedSize,
     totalSize,
+    ack,
+    setUploadedSize,
+    setTotalSize,
+    updatedUploadedSize,
   };
 };
