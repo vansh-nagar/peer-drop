@@ -19,7 +19,6 @@ const Page = () => {
     uploadedSize,
     setUploadedSize,
     totalSize,
-    ack,
     setTotalSize,
     File,
     updatedUploadedSize,
@@ -80,11 +79,11 @@ const Page = () => {
           <Button onClick={offer} variant={"outline"} className="">
             Send offer
           </Button>
-          <div
+          {/* <div
             className={`rounded-full border ${
               ack ? "bg-green-400" : "bg-red-500 "
             } h-2 aspect-square`}
-          ></div>
+          ></div> */}
         </div>
         <div className="flex items-center gap-3">
           <div className="h-2 w-full overflow-hidden bg-muted rounded-full">

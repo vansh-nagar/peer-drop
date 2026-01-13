@@ -1,4 +1,3 @@
-import { useInstantTransition } from "motion/react";
 import { useState, useRef, useEffect } from "react";
 
 export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
@@ -14,10 +13,12 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const [uploadedSize, setUploadedSize] = useState(10);
   const updatedUploadedSize = useRef(0);
   const PAUSE_STREAMING = useRef(false);
-  const [ack, setAck] = useState(false);
 
-  const MAX_MEMORY = 8 * 1024 * 1024;
+  const MAX_MEMORY = 80 * 1024 * 1024;
   const MIN_MEMORY = 2 * 1024 * 1024;
+  const ACK_WINDOW = 32;
+
+  const inFlightChunk = useRef(0);
 
   useEffect(() => {
     setInterval(() => {
@@ -64,7 +65,9 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
         );
       }
     };
+
     let reciveSize = 0;
+    let paused = false;
 
     pc.current.ondatachannel = (e) => {
       channel.current = e.channel;
@@ -90,30 +93,25 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
 
             reciveSize = 0;
             recivedData.current = [];
-
-            setAck(true);
-            channel.current?.send("ACK");
-
-            console.log("setting ack to true :)");
-            setTimeout(() => {
-              setAck(false);
-            }, 5000);
-
             return;
           }
-
-          return;
         }
 
         const byte = new Uint8Array(e.data);
         recivedData.current.push(byte);
         reciveSize += byte.length;
 
-        if (reciveSize > MAX_MEMORY) {
+        channel.current?.send("ACK");
+
+        if (!paused && reciveSize > MAX_MEMORY) {
           channel.current?.send("PAUSE");
-          await pause();
-          channel.current?.send("CONTINUE");
+          paused = true;
         }
+        if (paused && reciveSize < MAX_MEMORY) {
+          channel.current?.send("CONTINUE");
+          paused = false;
+        }
+
         console.log(byte);
       };
     };
@@ -155,11 +153,8 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
           console.log("CONTINUEEEEEEEEEEEEEE");
         }
         if (e.data === "ACK") {
-          console.log("setting ack to true :)");
-          setAck(true);
-          setTimeout(() => {
-            setAck(false);
-          }, 5000);
+          console.log("ACK CAME CONTINUING");
+          inFlightChunk.current = Math.max(0, inFlightChunk.current - 1);
         }
       }
     };
@@ -204,16 +199,18 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     const CHUNK_SIZE = 256 * 1024;
     setTotalSize(bytes.length);
 
-    for (let i = 0; i <= bytes.length; i += CHUNK_SIZE) {
+    for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
       if (PAUSE_STREAMING.current === true) await pauseTillStreamTrue();
 
-      channel.current?.send(bytes.slice(i, i + CHUNK_SIZE));
-      console.log(bytes.slice(i, i + CHUNK_SIZE));
-      updatedUploadedSize.current += CHUNK_SIZE;
-      console.log("BUFFER MEMORY: ", channel.current?.bufferedAmount);
-      if (channel.current?.bufferedAmount! > MAX_MEMORY) {
-        await pause();
+      while (inFlightChunk.current >= ACK_WINDOW) {
+        await new Promise<void>((r) => setTimeout(r, 20));
       }
+
+      if (channel.current?.bufferedAmount! > MAX_MEMORY) await pause();
+      channel.current?.send(bytes.slice(i, i + CHUNK_SIZE));
+      inFlightChunk.current++;
+
+      updatedUploadedSize.current += CHUNK_SIZE;
     }
     channel.current?.send("EOF");
   };
@@ -228,7 +225,6 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     Image,
     uploadedSize,
     totalSize,
-    ack,
     setUploadedSize,
     setTotalSize,
     updatedUploadedSize,
