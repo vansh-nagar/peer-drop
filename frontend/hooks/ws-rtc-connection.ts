@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { toast } from "sonner";
 
 export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const [message, setMessage] = useState<string>("");
@@ -13,6 +14,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const [uploadedSize, setUploadedSize] = useState(10);
   const updatedUploadedSize = useRef(0);
   const PAUSE_STREAMING = useRef(false);
+  const [totalUserCount, setTotalUserCount] = useState(0);
 
   const MAX_MEMORY = 80 * 1024 * 1024;
   const MIN_MEMORY = 2 * 1024 * 1024;
@@ -44,7 +46,8 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   useEffect(() => {
     ws.current = new WebSocket("ws://localhost:8080");
     ws.current.onopen = () => {
-      if (roomId) ws.current?.send(JSON.stringify({ type: "join", roomId }));
+      if (roomId && ws.current?.readyState === WebSocket.OPEN)
+        ws.current?.send(JSON.stringify({ type: "join", roomId }));
     };
 
     pc.current = new RTCPeerConnection({
@@ -67,7 +70,6 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     };
 
     let reciveSize = 0;
-    let paused = false;
 
     pc.current.ondatachannel = (e) => {
       channel.current = e.channel;
@@ -121,6 +123,12 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
       }
       if (data.type === "candidate") {
         pc.current?.addIceCandidate(new RTCIceCandidate(data.candidate));
+      }
+      if (data.type === "toast") {
+        toast.message(`${data.message}`);
+      }
+      if (data.type === "user-count") {
+        setTotalUserCount(data.count);
       }
     };
   }, []);
@@ -211,5 +219,6 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     setUploadedSize,
     setTotalSize,
     updatedUploadedSize,
+    totalUserCount,
   };
 };

@@ -10,12 +10,39 @@ wss.on("connection", function connection(ws: any) {
     const message = JSON.parse(data.toString());
 
     if (message.type === "join") {
-      console.log(`Client joined room: ${message.roomId}`);
       if (!rooms.has(message.roomId)) {
         rooms.set(message.roomId, []);
       }
 
+      if (rooms.get(message.roomId)!.length >= 2) {
+        ws.send(
+          JSON.stringify({
+            type: "toast",
+            message: `uh oh Room already filled :(`,
+          })
+        );
+        return;
+      }
+
       rooms.get(message.roomId)!.push(ws);
+      ws.send(
+        JSON.stringify({
+          type: "toast",
+          message: `Connected to ${message.roomId}`,
+        })
+      );
+
+      rooms.get(message.roomId)?.forEach((client) => {
+        console.log("message sent");
+        if (client.readyState === 1)
+          client.send(
+            JSON.stringify({
+              type: "user-count",
+              count: rooms.get(message.roomId)?.length,
+            })
+          );
+      });
+
       console.log(
         `Total clients in room ${message.roomId}: ${
           rooms.get(message.roomId)!.length
@@ -65,12 +92,22 @@ wss.on("connection", function connection(ws: any) {
   });
 
   ws.on("close", () => {
-    rooms.forEach((client, roomid) => {
+    rooms.forEach((client, roomId) => {
       rooms.set(
-        roomid,
+        roomId,
         client.filter((c) => c !== ws)
       );
-      console.log(`Client disconnected from room: ${roomid}`);
+      console.log(`Client disconnected from room: ${roomId}`);
+      rooms.get(roomId)?.forEach((client) => {
+        console.log("message sent");
+        if (client.readyState === 1)
+          client.send(
+            JSON.stringify({
+              type: "user-count",
+              count: rooms.get(roomId)?.length,
+            })
+          );
+      });
     });
   });
 });

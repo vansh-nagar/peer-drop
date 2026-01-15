@@ -1,12 +1,13 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { FileUpload } from "@/components/ui/file-upload";
-import { RotateCcw, Send } from "lucide-react";
+import { Copy, RotateCcw, Send } from "lucide-react";
 import { wsRtcConnectionHook } from "@/hooks/ws-rtc-connection";
 import { useParams } from "next/navigation";
 import RainBowBar from "@/components/mine/rainbow-bar";
 import { LightDarkMode } from "@/components/mine/light-dark-mode";
 import { toast } from "sonner";
+import TextMatrixRain from "@/components/mine/text-matrix";
 
 const Page = () => {
   const params = useParams();
@@ -22,6 +23,7 @@ const Page = () => {
     setTotalSize,
     File,
     updatedUploadedSize,
+    totalUserCount,
   } = wsRtcConnectionHook({ roomId: id });
 
   console.log(id);
@@ -39,9 +41,29 @@ const Page = () => {
         >
           <RotateCcw />
         </Button>
+        <Button
+          size={"icon"}
+          variant={"outline"}
+          onClick={() => {
+            navigator.clipboard.writeText(window.location.href);
+            toast.success("Copied to clipboard");
+          }}
+          className=" border-dashed rounded-none"
+        >
+          <Copy />
+        </Button>
+      </div>
+      <div>
+        <Button
+          size={"icon"}
+          variant={"outline"}
+          className="fixed top-4 left-4 text-green-400 rounded-none border-dashed"
+        >
+          <TextMatrixRain>{String(totalUserCount)}</TextMatrixRain>
+        </Button>
       </div>
       <div className="max-w-md w-full flex flex-col justify-center  gap-2">
-        <div className=" flex justify-center w-full h-40 aspect-square border">
+        <div className=" flex justify-center w-full h-40 aspect-square">
           {Image && (
             <img src={Image} className="w-full object-contain" alt="recived" />
           )}
