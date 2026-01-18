@@ -13,7 +13,6 @@ const Page = () => {
   const params = useParams();
   const { id } = params as { id: string };
   const {
-    offer,
     send,
     setFile,
     Image,
@@ -29,7 +28,7 @@ const Page = () => {
   console.log(id);
   return (
     <div className=" w-full flex justify-center items-center p-3">
-      <div className=" fixed top-4 right-4 flex gap-3 flex-col">
+      <div className=" fixed top-4 right-4 flex gap-2 flex-col">
         <LightDarkMode />
         <Button
           size={"icon"}
@@ -59,7 +58,9 @@ const Page = () => {
           variant={"outline"}
           className="fixed top-4 left-4 text-green-400 rounded-none border-dashed"
         >
-          <TextMatrixRain>{String(totalUserCount)}</TextMatrixRain>
+          <TextMatrixRain repeat={false}>
+            {String(totalUserCount)}
+          </TextMatrixRain>
         </Button>
       </div>
       <div className="max-w-md w-full flex flex-col justify-center  gap-2">
@@ -83,7 +84,7 @@ const Page = () => {
           </div>
         </div>
         <FileUpload onChange={setFile} />
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Button
             onClick={(e) => {
               if (!File?.length) return toast.error("Please enter a file");
@@ -97,9 +98,6 @@ const Page = () => {
             size={"icon"}
           >
             <Send />
-          </Button>
-          <Button onClick={offer} variant={"outline"} className="">
-            Send offer
           </Button>
           {/* <div
             className={`rounded-full border ${

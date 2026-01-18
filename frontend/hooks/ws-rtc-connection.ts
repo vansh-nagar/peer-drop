@@ -23,9 +23,10 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const inFlightChunk = useRef(0);
 
   useEffect(() => {
-    setInterval(() => {
+    const id = setInterval(() => {
       setUploadedSize(updatedUploadedSize.current);
     }, 50);
+    return () => clearInterval(id);
   }, []);
 
   const pause = async () => {
@@ -64,8 +65,21 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     pc.current.onicecandidate = (e) => {
       if (e.candidate && ws.current) {
         ws.current.send(
-          JSON.stringify({ type: "candidate", candidate: e.candidate, roomId })
+          JSON.stringify({ type: "candidate", candidate: e.candidate, roomId }),
         );
+      }
+    };
+
+    pc.current.onconnectionstatechange = () => {
+      const state = pc.current?.connectionState;
+      toast.message(`${pc.current?.connectionState}`);
+
+      if (state === "failed" || state === "closed") {
+        pc.current?.close();
+
+        pc.current?.getSenders().forEach((sender) => {
+          pc.current?.removeTrack(sender);
+        });
       }
     };
 
@@ -113,19 +127,24 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
       console.log("WebSocket message received:", message.data);
       const data = JSON.parse(message.data);
       if (data.type === "offer") {
-        pc.current?.setRemoteDescription(new RTCSessionDescription(data.offer));
+        await pc.current?.setRemoteDescription(
+          new RTCSessionDescription(data.offer),
+        );
         await answer();
       }
       if (data.type === "answer") {
-        pc.current?.setRemoteDescription(
-          new RTCSessionDescription(data.answer)
+        await pc.current?.setRemoteDescription(
+          new RTCSessionDescription(data.answer),
         );
       }
       if (data.type === "candidate") {
-        pc.current?.addIceCandidate(new RTCIceCandidate(data.candidate));
+        await pc.current?.addIceCandidate(new RTCIceCandidate(data.candidate));
       }
       if (data.type === "toast") {
         toast.message(`${data.message}`);
+      }
+      if (data.type === "send-offer") {
+        await offer();
       }
       if (data.type === "user-count") {
         setTotalUserCount(data.count);
@@ -162,7 +181,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const answer = async () => {
     if (!pc.current) return;
     const ans = await pc.current?.createAnswer();
-    pc.current?.setLocalDescription(ans);
+    await pc.current?.setLocalDescription(ans);
 
     if (ws.current)
       ws.current.send(JSON.stringify({ type: "answer", answer: ans, roomId }));
@@ -209,7 +228,6 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   return {
     message,
     setMessage,
-    offer,
     send,
     File,
     setFile,

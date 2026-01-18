@@ -14,64 +14,80 @@ wss.on("connection", function connection(ws: any) {
         rooms.set(message.roomId, []);
       }
 
-      if (rooms.get(message.roomId)!.length >= 2) {
+      const clients = rooms.get(message.roomId);
+      if (clients === undefined) return;
+
+      if (clients.length >= 2) {
         ws.send(
           JSON.stringify({
             type: "toast",
             message: `uh oh Room already filled :(`,
-          })
+          }),
         );
         return;
       }
 
-      rooms.get(message.roomId)!.push(ws);
+      clients.push(ws);
       ws.send(
         JSON.stringify({
           type: "toast",
           message: `Connected to ${message.roomId}`,
-        })
+        }),
       );
 
-      rooms.get(message.roomId)?.forEach((client) => {
+      clients.forEach((client) => {
         console.log("message sent");
         if (client.readyState === 1)
           client.send(
             JSON.stringify({
               type: "user-count",
-              count: rooms.get(message.roomId)?.length,
-            })
+              count: clients.length,
+            }),
           );
       });
 
-      console.log(
-        `Total clients in room ${message.roomId}: ${
-          rooms.get(message.roomId)!.length
-        }`
-      );
+      rooms.get(message.roomId);
+
+      console.log(`Total clients in room ${message.roomId}: ${clients.length}`);
+
+      const firstUser = clients[0];
+      if (clients.length === 2 && firstUser.readyState === 1) {
+        firstUser.send(
+          JSON.stringify({
+            type: "send-offer",
+            message: "Peer joined, you can start the transfer!",
+          }),
+        );
+      }
     }
 
     if (message.type === "offer") {
       console.log("offer received");
+      const clients = rooms.get(message.roomId);
+      if (clients === undefined) return;
 
-      rooms.get(message.roomId)!.forEach((client) => {
+      clients.forEach((client) => {
         if (client !== ws && client.readyState === 1) {
           client.send(
             JSON.stringify({
               type: "offer",
               offer: message.offer,
               roomId: message.roomId,
-            })
+            }),
           );
         }
       });
       console.log("offer forwarded");
     }
     if (message.type === "answer") {
+      const clients = rooms.get(message.roomId);
+      if (clients === undefined) return;
+
       console.log("answer received");
-      rooms.get(message.roomId)!.forEach((client) => {
+      clients.forEach((client) => {
         if (client !== ws && client.readyState === 1) {
           client.send(
-            JSON.stringify({ type: "answer", answer: message.answer })
+            JSON.stringify({ type: "answer", answer: message.answer }),
           );
         }
       });
@@ -80,10 +96,13 @@ wss.on("connection", function connection(ws: any) {
     if (message.type === "candidate") {
       console.log("candidate received");
 
-      rooms.get(message.roomId)!.forEach((client) => {
+      const clients = rooms.get(message.roomId);
+      if (clients === undefined) return;
+
+      clients.forEach((client) => {
         if (client !== ws && client.readyState === 1) {
           client.send(
-            JSON.stringify({ type: "candidate", candidate: message.candidate })
+            JSON.stringify({ type: "candidate", candidate: message.candidate }),
           );
         }
       });
@@ -95,7 +114,7 @@ wss.on("connection", function connection(ws: any) {
     rooms.forEach((client, roomId) => {
       rooms.set(
         roomId,
-        client.filter((c) => c !== ws)
+        client.filter((c) => c !== ws),
       );
       console.log(`Client disconnected from room: ${roomId}`);
       rooms.get(roomId)?.forEach((client) => {
@@ -105,7 +124,7 @@ wss.on("connection", function connection(ws: any) {
             JSON.stringify({
               type: "user-count",
               count: rooms.get(roomId)?.length,
-            })
+            }),
           );
       });
     });
