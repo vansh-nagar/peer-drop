@@ -15,6 +15,12 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const updatedUploadedSize = useRef(0);
   const PAUSE_STREAMING = useRef(false);
   const [totalUserCount, setTotalUserCount] = useState(0);
+  const localVideoStream = useRef<HTMLVideoElement | null>(null);
+
+  const remoteVideoStream = useRef<HTMLVideoElement | null>(null);
+
+  const localStreams = useRef<MediaStream | null>(null);
+  const remoteStreams = useRef<MediaStream | null>(null);
 
   const MAX_MEMORY = 80 * 1024 * 1024;
   const MIN_MEMORY = 2 * 1024 * 1024;
@@ -80,6 +86,18 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
         pc.current?.getSenders().forEach((sender) => {
           pc.current?.removeTrack(sender);
         });
+      }
+    };
+
+    pc.current.ontrack = async (e) => {
+      const remoteStream = e.streams[0];
+      remoteStreams.current = remoteStream;
+
+      if (remoteVideoStream.current) {
+        remoteVideoStream.current.srcObject = remoteStream;
+      }
+
+      if (remoteStreams.current) {
       }
     };
 
@@ -156,6 +174,23 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     channel.current = pc.current?.createDataChannel("data-transfer");
     if (channel.current) channel.current.binaryType = "arraybuffer";
     if (!channel.current) return;
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+
+    localStreams.current = stream;
+
+    stream.getTracks().forEach((track) => {
+      track.enabled = true;
+      pc.current?.addTrack(track, stream);
+    });
+
+    if (localVideoStream.current) {
+      localVideoStream.current.srcObject = stream;
+    }
+
     channel.current.onopen = () => {
       console.log("data channel open");
     };
@@ -180,6 +215,23 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
 
   const answer = async () => {
     if (!pc.current) return;
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+
+    stream.getTracks().forEach((track) => {
+      track.enabled = true;
+      pc.current?.addTrack(track, stream);
+    });
+
+    if (localVideoStream.current) {
+      localVideoStream.current.srcObject = stream;
+    }
+
+    localStreams.current = stream;
+
     const ans = await pc.current?.createAnswer();
     await pc.current?.setLocalDescription(ans);
 
@@ -238,5 +290,11 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     setTotalSize,
     updatedUploadedSize,
     totalUserCount,
+    pc,
+    remoteVideoStream,
+    offer,
+    localVideoStream,
+    localStreams,
+    remoteStreams,
   };
 };

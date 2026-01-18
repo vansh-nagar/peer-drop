@@ -1,13 +1,14 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { FileUpload } from "@/components/ui/file-upload";
-import { Copy, RotateCcw, Send } from "lucide-react";
+import { Copy, Phone, RotateCcw, Send } from "lucide-react";
 import { wsRtcConnectionHook } from "@/hooks/ws-rtc-connection";
 import { useParams } from "next/navigation";
 import RainBowBar from "@/components/mine/rainbow-bar";
 import { LightDarkMode } from "@/components/mine/light-dark-mode";
 import { toast } from "sonner";
 import TextMatrixRain from "@/components/mine/text-matrix";
+import { useRef } from "react";
 
 const Page = () => {
   const params = useParams();
@@ -23,12 +24,16 @@ const Page = () => {
     File,
     updatedUploadedSize,
     totalUserCount,
+    pc,
+    remoteVideoStream,
+    localVideoStream,
+    localStreams,
   } = wsRtcConnectionHook({ roomId: id });
 
   console.log(id);
   return (
-    <div className=" w-full flex justify-center items-center p-3">
-      <div className=" fixed top-4 right-4 flex gap-2 flex-col">
+    <div className=" w-full flex justify-center items-start p-3">
+      <div className=" fixed top-4 right-4 flex gap-2 flex-col z-50">
         <LightDarkMode />
         <Button
           size={"icon"}
@@ -51,6 +56,45 @@ const Page = () => {
         >
           <Copy />
         </Button>
+        <Button
+          size={"icon"}
+          variant={"outline"}
+          onClick={async () => {
+            // const track = localStreams.current?.getTracks();
+            // const anyEnabled = track?.some((t) => t.enabled);
+
+            if (localStreams.current) {
+              localStreams.current.getTracks().forEach((t) => {
+                t.enabled = !t.enabled;
+              });
+            }
+
+            // if (anyEnabled) {
+            //   track?.forEach((track) => track.stop());
+            //   localStreams.current = null;
+            //   console.log("stoppedddddddddddddddddd");
+            // } else {
+            //   const stream = await navigator.mediaDevices.getUserMedia({
+            //     video: true,
+            //     audio: true,
+            //   });
+
+            //   localStreams.current = stream;
+
+            //   if (localVideoStream.current) {
+            //     localVideoStream.current.srcObject = stream;
+            //   }
+
+            //   stream.getTracks().forEach((track) => {
+            //     pc.current?.addTrack(track, stream);
+            //   });
+            //   console.log("Stream Startedddddddddddddddddd");
+            // }
+          }}
+          className=" border-dashed rounded-none"
+        >
+          {<Phone />}
+        </Button>
       </div>
       <div>
         <Button
@@ -64,27 +108,59 @@ const Page = () => {
         </Button>
       </div>
       <div className="max-w-md w-full flex flex-col justify-center  gap-2">
-        <div className=" flex justify-center w-full h-40 aspect-square">
+        <div
+          className=" flex justify-center w-full h-20
+         aspect-square border border-dashed overflow-hidden"
+        >
           {Image && (
-            <img src={Image} className="w-full object-contain" alt="recived" />
+            <img
+              src={Image}
+              className="w-20 aspect-square object-cover border "
+              alt="recived"
+            />
           )}
-          <div className="flex flex-col">
-            {Image && (
-              <video
-                autoPlay
-                muted
-                loop
-                src={Image}
-                className="w-full object-contain"
-              />
-            )}
-            <a href={Image || ""} download={true}>
-              <Button size={"sm"}>Download</Button>
-            </a>
-          </div>
+          {Image && (
+            <video
+              autoPlay
+              muted
+              loop
+              src={Image}
+              className=" w-20 aspect-square object-cover border"
+            />
+          )}
+          <video
+            className="border scale-x-[-1] w-20 aspect-square object-cover"
+            ref={localVideoStream}
+            autoPlay
+            playsInline
+            muted
+          ></video>
+          <video
+            className="border scale-x-[-1] w-20 aspect-square object-cover "
+            ref={remoteVideoStream}
+            autoPlay
+            playsInline
+          ></video>
+        </div>{" "}
+        <div className="flex justify-end">
+          <a href={Image || ""} download={true}>
+            <Button
+              variant={"outline"}
+              className=" rounded-none border-dashed "
+              size={"sm"}
+            >
+              Download
+            </Button>
+          </a>
         </div>
         <FileUpload onChange={setFile} />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="h-2 w-full overflow-hidden bg-muted rounded-full">
+            <RainBowBar
+              style={{ width: `${(uploadedSize / totalSize) * 100}%` }}
+              className="rounded-full blur-xs transition-all duration-500 ease-out"
+            />
+          </div>
           <Button
             onClick={(e) => {
               if (!File?.length) return toast.error("Please enter a file");
@@ -99,20 +175,6 @@ const Page = () => {
           >
             <Send />
           </Button>
-          {/* <div
-            className={`rounded-full border ${
-              ack ? "bg-green-400" : "bg-red-500 "
-            } h-2 aspect-square`}
-          ></div> */}
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="h-2 w-full overflow-hidden bg-muted rounded-full">
-            <RainBowBar
-              style={{ width: `${(uploadedSize / totalSize) * 100}%` }}
-              className="rounded-full blur-xs transition-all duration-500 ease-out"
-            />
-          </div>
-          {/* {`${Math.floor((uploadedSize / totalSize) * 100)}%`} */}
         </div>
       </div>
     </div>
