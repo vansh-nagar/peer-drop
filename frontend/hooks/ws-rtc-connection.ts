@@ -15,6 +15,11 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const updatedUploadedSize = useRef(0);
   const PAUSE_STREAMING = useRef(false);
   const [totalUserCount, setTotalUserCount] = useState(0);
+  const reciverSize = useRef(0);
+  const fileNameRef = useRef("");
+
+  const [sendingFile, setSendingFile] = useState(false);
+
   const localVideoStream = useRef<HTMLVideoElement | null>(null);
 
   const remoteVideoStream = useRef<HTMLVideoElement | null>(null);
@@ -22,7 +27,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   const localStreams = useRef<MediaStream | null>(null);
   const remoteStreams = useRef<MediaStream | null>(null);
 
-  const MAX_MEMORY = 80 * 1024 * 1024;
+  const MAX_MEMORY = 8 * 1024 * 1024;
   const MIN_MEMORY = 2 * 1024 * 1024;
   const ACK_WINDOW = 32;
 
@@ -36,6 +41,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   }, []);
 
   const pause = async () => {
+    console.log("PAUSING FOR MEMORY TO DRAIN");
     await new Promise<void>((resolve) => {
       const check = () => {
         if (channel.current?.bufferedAmount! < MIN_MEMORY) {
@@ -48,6 +54,45 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
       };
       check();
     });
+  };
+
+  const onMessageHandler = (e: any) => {
+    if (typeof e.data === "string") {
+      if (e.data === "ACK") {
+        inFlightChunk.current = Math.max(0, inFlightChunk.current - 1);
+      }
+      if (e.data.startsWith("SIZE/")) {
+        const sizeStr = e.data.split("/");
+        // setTotalSize(Number(sizeStr[1]));
+      }
+
+      if (e.data.startsWith("EOF/")) {
+        const fileName = e.data.split("/");
+        fileNameRef.current = fileName[1];
+        let offset = 0;
+        let finalFile = new Uint8Array(reciverSize.current);
+        for (const chunk of recivedData.current) {
+          finalFile.set(chunk, offset);
+          offset += chunk.length;
+        }
+        const blob = new Blob([finalFile], { type: "image/png" });
+        const url = URL.createObjectURL(blob);
+        setImage(url);
+
+        reciverSize.current = 0;
+        recivedData.current = [];
+
+        return;
+      }
+    }
+
+    const byte = new Uint8Array(e.data);
+    recivedData.current.push(byte);
+    reciverSize.current += byte.length;
+
+    channel.current?.send("ACK");
+
+    // console.log(byte);
   };
 
   useEffect(() => {
@@ -90,6 +135,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     };
 
     pc.current.ontrack = async (e) => {
+      console.log("Remote track received", e.streams);
       const remoteStream = e.streams[0];
       remoteStreams.current = remoteStream;
 
@@ -101,8 +147,6 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
       }
     };
 
-    let reciveSize = 0;
-
     pc.current.ondatachannel = (e) => {
       channel.current = e.channel;
       channel.current.binaryType = "arraybuffer";
@@ -110,34 +154,12 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
         console.log("data channel open");
       };
       channel.current.onmessage = async (e) => {
-        console.log("P2P message received", e.data);
-        if (typeof e.data === "string") {
-          if (e.data === "EOF") {
-            console.log("EOFFFFFFFFF agaya bc");
-            console.log(recivedData.current);
-            let offset = 0;
-            let finalFile = new Uint8Array(reciveSize);
-            for (const chunk of recivedData.current) {
-              finalFile.set(chunk, offset);
-              offset += chunk.length;
-            }
-            const blob = new Blob([finalFile], { type: "image/png" });
-            const url = URL.createObjectURL(blob);
-            setImage(url);
-
-            reciveSize = 0;
-            recivedData.current = [];
-            return;
-          }
-        }
-
-        const byte = new Uint8Array(e.data);
-        recivedData.current.push(byte);
-        reciveSize += byte.length;
-
-        channel.current?.send("ACK");
-
-        console.log(byte);
+        onMessageHandler(e);
+      };
+      channel.current.bufferedAmountLowThreshold = MIN_MEMORY;
+      channel.current.onbufferedamountlow = () => {
+        console.log("BUFFERED AMOUNT LOW TRIGGERED");
+        PAUSE_STREAMING.current = false;
       };
     };
 
@@ -183,7 +205,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     localStreams.current = stream;
 
     stream.getTracks().forEach((track) => {
-      track.enabled = true;
+      track.enabled = false;
       pc.current?.addTrack(track, stream);
     });
 
@@ -196,12 +218,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     };
 
     channel.current.onmessage = (e) => {
-      if (typeof e.data === "string") {
-        if (e.data === "ACK") {
-          console.log("ACK CAME CONTINUING");
-          inFlightChunk.current = Math.max(0, inFlightChunk.current - 1);
-        }
-      }
+      onMessageHandler(e);
     };
 
     if (!pc.current) return;
@@ -222,7 +239,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     });
 
     stream.getTracks().forEach((track) => {
-      track.enabled = true;
+      track.enabled = false;
       pc.current?.addTrack(track, stream);
     });
 
@@ -255,26 +272,32 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
   };
 
   const send = async () => {
+    setSendingFile(true);
     const file = File![0];
+    console.log("Sending file:", file.type);
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
     const CHUNK_SIZE = 256 * 1024;
     setTotalSize(bytes.length);
 
+    channel.current?.send(`SIZE/${bytes.length}`);
+
     for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
       if (PAUSE_STREAMING.current === true) await pauseTillStreamFalse();
+      if (channel.current?.bufferedAmount! > MAX_MEMORY) await pause();
 
       while (inFlightChunk.current >= ACK_WINDOW) {
         await new Promise<void>((r) => setTimeout(r, 50));
       }
 
-      if (channel.current?.bufferedAmount! > MAX_MEMORY) await pause();
       channel.current?.send(bytes.slice(i, i + CHUNK_SIZE));
       inFlightChunk.current++;
 
       updatedUploadedSize.current += CHUNK_SIZE;
     }
-    channel.current?.send("EOF");
+    channel.current?.send(`EOF/${file.name}`);
+    setSendingFile(false);
+    return;
   };
 
   return {
@@ -296,5 +319,7 @@ export const wsRtcConnectionHook = ({ roomId }: { roomId: string }) => {
     localVideoStream,
     localStreams,
     remoteStreams,
+    sendingFile,
+    fileNameRef,
   };
 };
